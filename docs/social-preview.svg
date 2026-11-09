@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif">
+  <!-- GitHub social preview, 1280×640. Export: docs/social-preview.png -->
+  <rect width="1280" height="640" fill="#a9bc98"/>
+  <rect y="540" width="1280" height="100" fill="#3f7a52"/>
+  <!-- the cat, head only, with the pin -->
+  <g transform="translate(110 150) scale(1.45)">
+    <path d="M46 44 L70 118 L170 118 L194 44 L166 86 Q120 62 74 86 Z" fill="#141414"/>
+    <ellipse cx="120" cy="138" rx="80" ry="70" fill="#141414"/>
+    <ellipse cx="90" cy="128" rx="19" ry="22" fill="#f2b531"/>
+    <ellipse cx="150" cy="128" rx="19" ry="22" fill="#f2b531"/>
+    <ellipse cx="92" cy="130" rx="7" ry="14" fill="#141414"/>
+    <ellipse cx="148" cy="130" rx="7" ry="14" fill="#141414"/>
+    <circle cx="97" cy="120" r="3.5" fill="#fff"/><circle cx="153" cy="120" r="3.5" fill="#fff"/>
+    <g stroke="#141414" stroke-width="3" stroke-linecap="round">
+      <path d="M42 150 L8 142"/><path d="M44 166 L10 172"/><path d="M198 150 L232 142"/><path d="M196 166 L230 172"/>
+    </g>
+    <ellipse cx="121" cy="184" rx="10" ry="13" fill="#e58aa0"/>
+    <circle cx="186" cy="60" r="20" fill="#e58aa0" stroke="#141414" stroke-width="3"/>
+    <text x="186" y="67" text-anchor="middle" font-size="20" font-weight="800" fill="#141414">1</text>
+  </g>
+  <!-- title -->
+  <text x="520" y="235" font-size="92" font-weight="800" fill="#141414" letter-spacing="-2">Pinpaw</text>
+  <text x="520" y="292" font-size="34" font-weight="700" fill="#2a4a33">HTML deck editor · one file, no install</text>
+  <text x="520" y="372" font-size="30" font-weight="600" fill="#141414">Light edits by you.</text>
+  <text x="520" y="416" font-size="30" font-weight="600" fill="#141414">Heavy edits by your agent, from one JSON.</text>
+  <!-- the three steps, on the table -->
+  <g font-size="22" font-weight="600" fill="#fffdf6">
+    <circle cx="150" cy="590" r="8" fill="#f2b531"/><text x="172" y="598">1 · pin a comment on the element</text>
+    <circle cx="560" cy="590" r="8" fill="#f2b531"/><text x="582" y="598">2 · Export JSON</text>
+    <circle cx="830" cy="590" r="8" fill="#f2b531"/><text x="852" y="598">3 · your agent remakes the slide</text>
+  </g>
+</svg>
