@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Pinpaw · HTML deck editor</title>
+<!-- Pinpaw, an HTML deck editor: one HTML file, no build, no server, no library. It opens a folder that holds an
+     HTML deck (or any HTML page) and its images, and lets you do the light edits yourself: text,
+     moving and resizing an element, swapping or adding an image, with undo. Anything heavier you pin
+     as a comment, then export one JSON for your agent (Claude, Codex, …) to carry out.
+     The file you opened is never rewritten. Export JSON writes <deck>.review.json next to it, the
+     log of every edit and comment, each with a CSS path and the original value so an agent can find
+     the element in the source; the next open reads it back. Export final deck copies the edited
+     page and its images into an empty folder. Chrome and Edge (File System Access API). -->
+<style>
+:root { --accent: #826cff; --heading: #111111; --body: #4b4b4b; --muted: #76768a; --grey-bg: #f8fafd; --line: rgba(152, 140, 255, 0.35); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }  /* else #empty's display: flex keeps the hint on screen under the deck */
+html, body { margin: 0; height: 100%; }
+body { display: flex; flex-direction: column; background: #ffffff; color: var(--heading); font: 14px/1.4 -apple-system, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+#bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+#bar strong { margin-right: 6px; }
+.gap { width: 10px; }
+button, select { font: inherit; border: 0; border-radius: 8px; padding: 7px 11px; background: #f3f1ff; color: var(--heading); cursor: pointer; white-space: nowrap; }
+button.on, button.primary { background: var(--accent); color: #ffffff; }
+button:disabled, select:disabled { opacity: 0.4; cursor: default; }
+select { border: 1px solid var(--line); background: #ffffff; max-width: 300px; }
+.sub { display: none; }
+body.m-move .sub { display: inline-block; }
+#count { background: none; color: var(--muted); font-size: 13px; padding: 7px 6px; text-decoration: underline dotted; }
+#log { position: fixed; top: 56px; right: 12px; z-index: 10; width: min(560px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; background: #ffffff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 14px 16px; font-size: 13px; line-height: 1.5; }
+#log h3 { margin: 10px 0 4px; font-size: 13px; }
+#log ol { margin: 0; padding-left: 20px; }
+#log .where { color: var(--muted); margin: 0 0 6px; }
+#msg { flex: 1; min-width: 220px; color: var(--body); }
+#view { flex: 1; width: 100%; border: 0; background: var(--grey-bg); }
+#empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted); line-height: 1.7; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <strong title="Pinpaw: pin a comment, let the paw do the rest">🐾 Pinpaw</strong>
+  <button id="open" class="primary" title="What it does: Opens a folder that holds an HTML deck and its images. The file itself is never changed.&#10;What you do: Choose the folder.">Open folder…</button>
+  <select id="pick" disabled><option>No deck open</option></select>
+  <span class="gap"></span>
+  <button class="need" data-mode="text" disabled title="What it does: Makes the page's text typeable. Text with data-en / data-<lang> changes only in the language on screen.&#10;What you do: Click a text and type.">✏️ Text</button>
+  <button class="need" data-mode="move" disabled title="What it does: Shifts or resizes one element; the rest of the page stays where it is.&#10;What you do: Drag the element. To resize, click it, then ＋ / －; Reset puts it back.">✋ Move</button>
+  <button class="sub" data-act="bigger">＋</button>
+  <button class="sub" data-act="smaller">－</button>
+  <button class="sub" data-act="reset">Reset</button>
+  <button class="need" data-mode="image" disabled title="What it does: Swaps an image for a file from your computer, or adds a new image after a text.&#10;What you do: Click the image (or the text), then pick a file, 5 MB at most.">🖼 Image</button>
+  <button class="need" data-mode="pin" disabled title="What it does: Pins a note to one element, for your agent to act on later. Notes go into the JSON only, never into the page.&#10;What you do: Click where the note belongs and type it.">📌 Comment</button>
+  <button class="need" data-act="undo" disabled title="What it does: Takes back your last change.&#10;What you do: Click once for each step back.">↶ Undo</button>
+  <span class="gap"></span>
+  <button class="need" id="count" disabled></button>
+  <button class="need" id="json" disabled title="What it does: Writes every edit and comment into <deck>.review.json next to the file, each with the element's CSS path and original value. The file you opened stays as it was; open the folder again and your work is back.&#10;What you do: Export often. Give the JSON and the deck to your agent.">📤 Export JSON</button>
+  <button class="need" id="final" disabled title="What it does: Copies the page with your edits, and its images, into a folder you choose. No comments, no JSON: the finished deck.&#10;What you do: Choose an empty folder. Present it, or zip it to send.">📤 Export final deck…</button>
+  <span id="msg"></span>
+</div>
+<div id="empty">Open the folder that holds your deck: the .html file and its images folder. Chrome or Edge.<br>Light edits you do here: text, move, image. Heavy ones you pin as a comment and export for your agent.</div>
+<iframe id="view" hidden></iframe>
+<div id="log" hidden></div>
+<input type="file" id="file" accept="image/*" hidden>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const ui = { log: $('log'), open: $('open'), pick: $('pick'), json: $('json'), final: $('final'), count: $('count'), msg: $('msg'), view: $('view'), empty: $('empty'), file: $('file') };
+  const SELF = decodeURIComponent(location.pathname.split('/').pop());
+  const MAX_IMAGE = 5 * 1024 * 1024;
+  // dir: the chosen folder · file: the deck's handle, read only · model: the deck as a parsed document,
+  // never run, with the edits applied; what Export final deck writes · view: a running copy on screen
+  // newFiles: images to write on Export final deck ("images/x.png" -> Blob) · log: the review file's content
+  let dir = null, file = null, model = null, viewReady = false, newFiles = new Map(), urls = [];
+  let log = null, history = [], mode = null, dirty = false, selected = null, lastTextEl = null;
+  let gen = 0;  // which opened deck the state belongs to; async work started for an earlier deck is dropped
+  const say = t => { ui.msg.textContent = t; };
+  const byEid = (doc, id) => doc && doc.querySelector('[data-eid="' + CSS.escape(id) + '"]');
+  const vdoc = () => (viewReady ? ui.view.contentDocument : null);
+  const isRel = u => !!u && !/^([a-z][\w+.-]*:|\/\/|\/|#)/i.test(u.trim());
+  const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+  const reviewNameOf = n => n.replace(/\.html?$/i, '') + '.review.json';
+  const reviewName = () => reviewNameOf(file.name);
+  function setDirty(on) { dirty = on; ui.json.textContent = on ? '📤 Export JSON •' : '📤 Export JSON'; if (log && dir && file) refresh(); }
+  addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
+  function slideNo(id) { const m = byEid(model, id), s = m && m.closest('.slide'); return s ? [...model.querySelectorAll('.slide')].indexOf(s) + 1 : 0; }
+  function what(el) { if (!el) return ''; if (el.classList.contains('slide')) return 'this slide'; return (el.tagName === 'IMG' ? (el.getAttribute('alt') || el.getAttribute('src')) : el.textContent).trim().replace(/\s+/g, ' ').slice(0, 40); }
+  // A CSS path from <body> down, so an agent can find the element in the source file, which carries
+  // no anchors: body > section:nth-of-type(3) > div.card > p:nth-of-type(2). An id ends the climb.
+  function pathOf(el) {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1 && e.tagName !== 'HTML'; e = e.parentElement) {
+      if (e.id) { parts.unshift('#' + CSS.escape(e.id)); break; }
+      let s = e.tagName.toLowerCase();
+      const cls = [...e.classList].filter(c => !/^de-/.test(c)).slice(0, 2);
+      if (cls.length) s += '.' + cls.map(c => CSS.escape(c)).join('.');
+      const p = e.parentElement;
+      if (p) { const same = [...p.children].filter(c => c.tagName === e.tagName); if (same.length > 1) s += ':nth-of-type(' + (same.indexOf(e) + 1) + ')'; }
+      parts.unshift(s);
+      if (e.tagName === 'BODY') break;
+    }
+    return parts.join(' > ');
+  }
+  const pathOfId = id => { const m = byEid(model, id); return m ? pathOf(m) : ''; };
+
+  // ---------- anchors ("cutting") ----------
+  // Every element a person may touch gets an id for this session: the slide (.slide), bilingual text
+  // (data-en), images and videos, and plain-text elements (only text, no child tags). An element that
+  // already has data-eid keeps it; a new one gets e<n> above the highest e<n> in the file. The file is
+  // never rewritten, so the numbering is recomputed on every open; it is deterministic for one file.
+  const HIDDEN = new Set(['SCRIPT', 'STYLE', 'TITLE', 'DESC', 'NOSCRIPT', 'TEMPLATE']);
+  function touchable(el) {
+    if (HIDDEN.has(el.tagName) || el.closest('svg')) return false;
+    if (el.classList.contains('slide') || el.hasAttribute('data-en') || el.tagName === 'IMG' || el.tagName === 'VIDEO') return true;
+    return !el.children.length && el.textContent.trim() !== '' && !el.closest('[data-en]');
+  }
+  const topEid = doc => Math.max(0, ...[...doc.querySelectorAll('[data-eid]')].map(e => +(/^e(\d+)$/.exec(e.dataset.eid) || [0, 0])[1]));
+  function cut(doc) {
+    const slides = [...doc.querySelectorAll('.slide')];
+    const all = slides.length ? slides.flatMap(s => [s, ...s.querySelectorAll('*')]) : [...doc.body.querySelectorAll('*')];
+    let n = topEid(doc), added = 0;
+    for (const el of all) if (!el.hasAttribute('data-eid') && touchable(el)) { el.setAttribute('data-eid', 'e' + (++n)); added++; }
+    return added;
+  }
+  const isText = el => el.hasAttribute('data-en') || !(el.classList.contains('slide') || /#0$/.test(el.dataset.eid) || el.tagName === 'IMG' || el.tagName === 'VIDEO');
+
+  // ---------- markup the browser adds while typing ----------
+  function tidy(root) {
+    root.querySelectorAll('font').forEach(x => x.replaceWith(...x.childNodes));
+    root.querySelectorAll('span[style]').forEach(x => x.removeAttribute('style'));
+    root.querySelectorAll('span:not([class]):not([id])').forEach(x => { if (!x.attributes.length) x.replaceWith(...x.childNodes); });
+  }
+
+  // ---------- the review log: one entry per changed thing, original -> latest ----------
+  // Net change only: an element changed and changed back leaves no entry. "old" is kept from the
+  // first change, so it stays the value the file had when it was opened.
+  const keyOf = e => e.type === 'text' ? 'text|' + e.anchor + '|' + e.lang : e.type === 'add-image' ? 'add|' + e.id : e.type + '|' + e.anchor;
+  function record(entry, same) {
+    const key = keyOf(entry), prev = log.edits[key];
+    if (prev && 'old' in prev) entry.old = prev.old;
+    if ('old' in entry && same(entry.old, entry.new)) delete log.edits[key];
+    else { entry.path = pathOfId(entry.id || entry.anchor); entry.at = stamp(); log.edits[key] = entry; }
+    setDirty(true); refresh();
+  }
+  function refresh() {
+    const e = Object.keys(log.edits).length, c = log.comments.length;
+    ui.count.textContent = e + ' edit' + (e === 1 ? '' : 's') + ' · ' + c + ' comment' + (c === 1 ? '' : 's');
+    ui.count.title = 'What it is: the log of your edits and comments, kept in ' + dir.name + ' / ' + reviewName() + (dirty ? ' (not exported yet: 📤 Export JSON writes it).' : '.') + '\nWhat you do: click to see the list here.';
+    if (!ui.log.hidden) showLog();
+    const d = vdoc(); if (!d) return;
+    d.querySelectorAll('.de-changed').forEach(x => x.classList.remove('de-changed'));
+    Object.values(log.edits).forEach(x => { const el = byEid(d, x.id || x.anchor); if (el) el.classList.add('de-changed'); });
+  }
+
+  // ---------- the log, shown in the editor ----------
+  const esc = s => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function describe(x) {
+    if (x.type === 'text') return (x.lang === 'both' ? '' : x.lang.toUpperCase() + ' ') + 'text: "' + esc(x.old) + '" → "' + esc(x.new) + '"';
+    if (x.type === 'move') return 'Moved or resized "' + esc(x.what) + '"' + (x.new.move ? ' (' + esc(x.new.move) + ')' : '') + (x.new.scale ? ' ×' + esc(x.new.scale) : '');
+    if (x.type === 'image') return 'Image replaced: ' + esc(x.old) + ' → ' + esc(x.name);
+    if (x.type === 'add-image') return 'Image added after "' + esc(x.what) + '": ' + esc(x.name);
+    return esc(x.type);
+  }
+  function showLog() {
+    const edits = Object.values(log.edits).sort((a, b) => a.slide - b.slide), c = log.comments;
+    ui.log.innerHTML = '<p class="where">Kept in <b>' + esc(dir.name) + ' / ' + esc(reviewName()) + '</b>' + (dirty ? ', not exported yet: 📤 Export JSON writes it.' : '.') + ' Click the counter again to close.</p>'
+      + '<h3>Edits (' + edits.length + ')</h3>' + (edits.length ? '<ol>' + edits.map(x => '<li>' + (x.slide ? 'Slide ' + x.slide + ' · ' : '') + describe(x) + '</li>').join('') + '</ol>' : '<p>None yet.</p>')
+      + '<h3>Comments (' + c.length + ')</h3>' + (c.length ? '<ol>' + c.map(x => '<li>' + (x.slide ? 'Slide ' + x.slide + ' · ' : '') + 'on "' + esc(x.what) + '": ' + esc(x.text) + '</li>').join('') + '</ol>' : '<p>None yet.</p>');
+  }
+  ui.count.addEventListener('click', () => { ui.log.hidden = !ui.log.hidden; if (!ui.log.hidden) showLog(); });
+
+  // ---------- undo: each step keeps the log and the touched elements as they were ----------
+  function step(ids) {
+    history.push({ log: JSON.stringify(log), els: ids.map(id => ({ id, m: (byEid(model, id) || {}).outerHTML || null, v: (byEid(vdoc(), id) || {}).outerHTML || null })) });
+    if (history.length > 200) history.shift();
+  }
+  function undo() {
+    const h = history.pop(); if (!h) return say('Nothing left to undo.');
+    log = JSON.parse(h.log);
+    for (const e of h.els) for (const [doc, html] of [[model, e.m], [vdoc(), e.v]]) {
+      const el = byEid(doc, e.id); if (!el) continue;
+      if (html === null) el.remove(); else el.outerHTML = html;
+    }
+    lastTextEl = null; select(null); applyMode(); renderPins(); setDirty(true); refresh();
+    say('Undone.');
+  }
+
+  // ---------- the four kinds of change: put* applies to the model and the view, write*/set* also records ----------
+  // Multi-language text: an element with data-en (its English, also its own text) may carry data-<lang>
+  // for any other language (data-zh, data-ja, …); the page's own switch sets <body data-lang="…">. The
+  // editor writes the language on screen into its attribute, and 'both' for plain text with no languages.
+  function langOf(el) {
+    if (!el.hasAttribute('data-en')) return 'both';
+    const l = (el.ownerDocument.body.getAttribute('data-lang') || 'en').toLowerCase();
+    return l !== 'en' && el.hasAttribute('data-' + l) ? l : 'en';
+  }
+  function editText(el, val) { writeText(el.dataset.eid, langOf(el), val); }  // el: the element typed into, in the view
+  function putText(id, lang, val) {  // lang: 'en', 'zh', 'ja', … for multi-language text, 'both' for plain text; returns what it replaced
+    const m = byEid(model, id), v = byEid(vdoc(), id); if (!m) return null;
+    let old;
+    if (lang === 'both') { old = m.innerHTML; m.innerHTML = val; if (v && v.innerHTML !== val) v.innerHTML = val; }
+    else {
+      old = m.getAttribute('data-' + lang);
+      m.setAttribute('data-' + lang, val);
+      if (lang === 'en') m.innerHTML = val;          // the source keeps English as the element's own text
+      if (v) v.setAttribute('data-' + lang, val);    // the page's language switch reads this attribute
+    }
+    return { m, old };
+  }
+  function writeText(id, lang, val) {
+    const r = putText(id, lang, val); if (!r) return;
+    record({ type: 'text', anchor: id, slide: slideNo(id), what: what(r.m), lang, old: r.old, new: val }, (a, b) => a === b);
+  }
+  function putMove(id, mv, sc) {
+    const m = byEid(model, id); if (!m) return null;
+    const old = { move: m.style.translate, scale: m.style.scale };
+    for (const el of [m, byEid(vdoc(), id)]) if (el) { el.style.translate = mv; el.style.scale = sc; if (!el.getAttribute('style')) el.removeAttribute('style'); }
+    return { m, old };
+  }
+  function setMove(id, t) {
+    const mv = t.x || t.y ? t.x + 'px ' + t.y + 'px' : '', sc = t.scale !== 1 ? String(t.scale) : '';
+    const r = putMove(id, mv, sc); if (!r) return;
+    record({ type: 'move', anchor: id, slide: slideNo(id), what: what(r.m), old: r.old, new: { move: mv, scale: sc } }, (a, b) => a.move === b.move && a.scale === b.scale);
+  }
+  async function storeImage(name, dataUrl, rel) {
+    rel = rel || 'images/edited-' + Date.now().toString(36) + '-' + newFiles.size + '-' + name.replace(/[^\w.-]+/g, '_');
+    const blob = await (await fetch(dataUrl)).blob();
+    newFiles.set(rel, blob);
+    const url = URL.createObjectURL(blob); urls.push(url);
+    return { rel, url };
+  }
+  async function putImage(id, name, data, rel) {  // replaces the image's file; the view shows a blob URL
+    const g = gen, got = await storeImage(name, data, rel); if (g !== gen) return null;
+    const m = byEid(model, id), v = byEid(vdoc(), id); if (!m) return null;
+    const old = m.getAttribute('src');
+    m.setAttribute('src', got.rel); if (v) v.src = got.url;
+    return { m, old, rel: got.rel };
+  }
+  async function replaceImage(id, name, data) {
+    const r = await putImage(id, name, data); if (!r) return;
+    const added = log.edits['add|' + id];  // an image added in this session: update that entry instead
+    if (added) Object.assign(added, { new: r.rel, name, data, at: stamp() }), setDirty(true), refresh();
+    else record({ type: 'image', anchor: id, slide: slideNo(id), what: what(r.m), old: r.old, new: r.rel, name, data }, () => false);
+  }
+  async function putAddImage(afterId, name, data, newId, rel) {
+    const g = gen, got = await storeImage(name, data, rel); if (g !== gen) return null;
+    for (const [doc, src] of [[model, got.rel], [vdoc(), got.url]]) {
+      const after = byEid(doc, afterId); if (!after) continue;
+      const img = doc.createElement('img');
+      img.setAttribute('data-eid', newId); img.setAttribute('src', src); img.setAttribute('alt', ''); img.style.maxWidth = '100%';
+      after.after(img);
+    }
+    return byEid(model, newId) ? { rel: got.rel } : null;
+  }
+  async function addImage(afterId, name, data, newId) {
+    const r = await putAddImage(afterId, name, data, newId); if (!r) return;
+    record({ type: 'add-image', anchor: afterId, id: newId, slide: slideNo(afterId), what: what(byEid(model, afterId)), new: r.rel, name, data }, () => false);
+  }
+
+  // ---------- reading and writing the folder ----------
+  async function readRel(path, from = dir) {
+    const parts = decodeURIComponent(path.split(/[?#]/)[0]).split('/').filter(p => p && p !== '.');
+    let d = from;
+    for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p);
+    return (await d.getFileHandle(parts[parts.length - 1])).getFile();
+  }
+  async function writeRel(path, blob, to = dir) {
+    const parts = decodeURIComponent(path).split('/');
+    let d = to;
+    for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+    const w = await (await d.getFileHandle(parts[parts.length - 1], { create: true })).createWritable();
+    await w.write(blob); await w.close();
+  }
+  // Every relative file a document points at: src, poster, stylesheet links, CSS url().
+  const URLRE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
+  function mapRels(doc, f) {  // f(rel) returns a replacement, or null to leave it
+    for (const el of doc.querySelectorAll('[src], [poster], link[href]'))
+      for (const a of ['src', 'poster', 'href']) {
+        if (a === 'href' && el.tagName !== 'LINK') continue;
+        const v = el.getAttribute(a); if (!isRel(v)) continue;
+        const r = f(v); if (r != null) el.setAttribute(a, r);
+      }
+    const css = s => s.replace(URLRE, (m, q, u) => { if (!isRel(u)) return m; const r = f(u); return r == null ? m : 'url("' + r + '")'; });
+    doc.querySelectorAll('style').forEach(s => { const t = css(s.textContent); if (t !== s.textContent) s.textContent = t; });
+    doc.querySelectorAll('[style]').forEach(el => { const t = css(el.getAttribute('style')); if (t !== el.getAttribute('style')) el.setAttribute('style', t); });
+  }
+  function relsOf(doc) { const set = new Set(); mapRels(doc.cloneNode(true), r => { set.add(r); return null; }); return [...set]; }
+
+  // ---------- showing the deck ----------
+  async function render() {
+    viewReady = false;
+    urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+    const d = model.cloneNode(true), done = new Map();
+    const missing = [];
+    for (const rel of relsOf(d)) {
+      try { const u = URL.createObjectURL(newFiles.get(rel) || await readRel(rel)); urls.push(u); done.set(rel, u); } catch (e) { missing.push(rel); }
+    }
+    mapRels(d, r => done.get(r) || null);
+    // The view has no address of its own (srcdoc), so a page that writes to the URL (history.replaceState)
+    // would throw and stop its own scripts; in the view that write is skipped.
+    const guard = d.createElement('script');
+    guard.textContent = "['replaceState','pushState'].forEach(k => { const f = history[k].bind(history); history[k] = (...a) => { try { return f(...a); } catch (e) {} }; });";
+    d.head.prepend(guard);
+    ui.view.srcdoc = '<!DOCTYPE html>\n' + d.documentElement.outerHTML;
+    ui.view.hidden = false; ui.empty.hidden = true;
+    return missing;
+  }
+  const VIEW_CSS = `
+    body.de-text [data-de-edit] { outline: 1px dashed rgba(130,108,255,.7); outline-offset: 3px; cursor: text; }
+    body.de-move [data-eid]:not(.slide) { cursor: move; }
+    body.de-move [data-eid]:not(.slide):hover { outline: 1px dashed #ff7a5c; outline-offset: 3px; }
+    body.de-pin, body.de-image { cursor: crosshair; }
+    .de-sel { outline: 2px solid #ff7a5c !important; outline-offset: 3px; }
+    .de-target { outline: 3px dashed #ff7a5c !important; outline-offset: 4px; }
+    .de-changed { box-shadow: 0 3px 0 -1px #ff7a5c; }
+    .de-dot { position: absolute; z-index: 60; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: #ff7a5c; color: #fff; font: 700 20px/40px sans-serif; text-align: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+    .de-dot:hover::after { content: attr(data-text); position: absolute; top: 0; left: 52px; width: max-content; max-width: 520px; background: #111; color: #fff; border-radius: 8px; padding: 10px 14px; font: 400 24px/1.4 -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; text-align: left; white-space: pre-wrap; }
+    .de-dot.de-left:hover::after { left: auto; right: 52px; }`;
+  ui.view.addEventListener('load', () => {
+    const doc = ui.view.contentDocument; if (!doc || !model || !doc.body) return;
+    viewReady = true;
+    const st = doc.createElement('style'); st.textContent = VIEW_CSS; doc.head.appendChild(st);
+    doc.querySelectorAll('[data-eid]').forEach(el => { if (isText(el)) el.setAttribute('data-de-edit', ''); });
+    doc.addEventListener('beforeinput', e => {  // one undo step per element, taken before the first keystroke
+      const el = e.target.closest && e.target.closest('[data-de-edit]');
+      if (el && el !== lastTextEl) { step([el.dataset.eid]); lastTextEl = el; }
+    }, true);
+    doc.addEventListener('focusout', () => { lastTextEl = null; });
+    doc.addEventListener('input', onInput);
+    doc.addEventListener('paste', e => {  // plain text only: formatted paste brings foreign markup
+      if (!e.target.closest || !e.target.closest('[contenteditable]')) return;
+      e.preventDefault(); doc.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+    });
+    doc.addEventListener('keydown', onKey);
+    doc.addEventListener('click', onClick, true);
+    doc.addEventListener('mouseover', e => mark(e.target.closest && e.target.closest('.de-dot') ? null : targetOf(e.target)));
+    doc.addEventListener('mouseleave', () => mark(null));
+    doc.addEventListener('pointerdown', onDown);
+    doc.addEventListener('pointermove', onDrag);
+    doc.addEventListener('pointerup', onUp);
+    applyMode(); renderPins(); refresh();
+  });
+
+  // ---------- modes ----------
+  const HINTS = {
+    text: 'Click any text and type. Text with data-en / data-<lang> is edited in the language on screen; everything else is plain text.',
+    move: 'Drag an element to move it. Select it, then + / − to resize it, or Reset to put it back.',
+    image: 'Click an image to replace it, or a text to add an image after it. 5 MB per image at most.',
+    pin: 'The dashed outline shows what your comment attaches to. Click to write it, for your agent to act on later. Hover over an orange dot to read it; click it to edit or delete.'
+  };
+  function setMode(m) { mode = mode === m ? null : m; select(null); mark(null); applyMode(); say(mode ? HINTS[mode] : ''); }
+  function applyMode() {
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    document.body.classList.toggle('m-move', mode === 'move');
+    const d = vdoc(); if (!d) return;
+    ['text', 'move', 'image', 'pin'].forEach(x => d.body.classList.toggle('de-' + x, mode === x));
+    d.querySelectorAll('[data-de-edit]').forEach(el => { if (mode === 'text') el.setAttribute('contenteditable', 'true'); else el.removeAttribute('contenteditable'); });
+  }
+  function select(el) { if (selected) selected.classList.remove('de-sel'); selected = el; if (el) el.classList.add('de-sel'); }
+  let target = null;
+  function mark(el) { if (target) target.classList.remove('de-target'); target = el; if (el) el.classList.add('de-target'); }
+  function slideOf(el) { const d = vdoc(); return (el && el.closest('.slide')) || d.querySelector('.slide.active') || d.body; }
+  function targetOf(t) {
+    if (!t.closest) return null;
+    if (mode === 'pin') return t.closest('[data-eid]') || slideOf(t);
+    if (mode === 'image') return t.closest('img[data-eid]') || t.closest('[data-de-edit]');
+    return null;
+  }
+
+  // ---------- text ----------
+  function onInput(e) {
+    const el = e.target.closest && e.target.closest('[data-de-edit]'); if (!el) return;
+    if (el.querySelector('font, span[style]')) {  // keep the caret where it was while unwrapping
+      const sel = el.ownerDocument.getSelection(), node = sel.focusNode, off = sel.focusOffset;
+      tidy(el); if (node && node.isConnected) sel.collapse(node, off);
+    }
+    editText(el, el.innerHTML);
+  }
+
+  // ---------- move and scale ----------
+  function moveOf(el) {
+    const m = /(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?/.exec(el.style.translate || '');
+    return { x: m ? +m[1] : 0, y: m && m[2] ? +m[2] : 0, scale: parseFloat(el.style.scale) || 1 };
+  }
+  let drag = null;
+  function onDown(e) {
+    if (mode !== 'move') return;
+    const el = e.target.closest && e.target.closest('[data-eid]');
+    if (!el || el.classList.contains('slide')) return;
+    e.preventDefault(); select(el);
+    // A deck scaled to fit the window (a .deck laid out at 1920px) needs the drag scaled back to its own pixels.
+    const deck = vdoc().querySelector('.deck');
+    drag = { el, x0: e.clientX, y0: e.clientY, t0: moveOf(el), k: deck ? deck.getBoundingClientRect().width / 1920 : 1 };
+  }
+  function onDrag(e) {
+    if (!drag) return;
+    drag.t = { x: Math.round(drag.t0.x + (e.clientX - drag.x0) / drag.k), y: Math.round(drag.t0.y + (e.clientY - drag.y0) / drag.k), scale: drag.t0.scale };
+    drag.el.style.translate = drag.t.x + 'px ' + drag.t.y + 'px';
+  }
+  function onUp() {
+    if (drag && drag.t) {
+      const id = drag.el.dataset.eid, t = drag.t;
+      drag.el.style.translate = drag.t0.x || drag.t0.y ? drag.t0.x + 'px ' + drag.t0.y + 'px' : '';  // back to the start, so the step records it
+      step([id]); setMove(id, t);
+    }
+    drag = null;
+  }
+  function nudge(act) {
+    if (!selected) return say('First click the element you want to adjust.');
+    const t = moveOf(selected);
+    if (act === 'bigger') t.scale = Math.round((t.scale + 0.05) * 100) / 100;
+    if (act === 'smaller') t.scale = Math.max(0.1, Math.round((t.scale - 0.05) * 100) / 100);
+    if (act === 'reset') { t.x = 0; t.y = 0; t.scale = 1; }
+    step([selected.dataset.eid]); setMove(selected.dataset.eid, t);
+    selected = byEid(vdoc(), selected.dataset.eid); select(selected);
+  }
+
+  // ---------- images and comments: one click on the page picks the place ----------
+  let pending = null;
+  function onClick(e) {
+    if (mode !== 'image' && mode !== 'pin') return;
+    if (e.target.closest && e.target.closest('.de-dot')) return;
+    e.preventDefault(); e.stopPropagation();
+    if (mode === 'pin') return addComment(e);
+    const img = e.target.closest('img[data-eid]'), text = e.target.closest('[data-de-edit]');
+    if (img) pending = { op: 'replace', id: img.dataset.eid };
+    else if (text) pending = { op: 'add', id: text.dataset.eid };
+    else return say('Click an image to replace it, or a text to add an image after it.');
+    ui.file.value = ''; ui.file.click();
+  }
+  ui.file.addEventListener('change', () => {
+    const f = ui.file.files[0]; if (!f || !pending) return;
+    if (f.size > MAX_IMAGE) return say('This image is over 5 MB. Compress it and try again, or put a link in a comment.');
+    const r = new FileReader(), g = gen;
+    r.onload = async () => {
+      const p = pending; pending = null;
+      if (g !== gen || !p) return;  // another deck was opened meanwhile
+      if (p.op === 'replace') { step([p.id]); await replaceImage(p.id, f.name, r.result); }
+      else { const id = 'e' + (topEid(model) + 1); step([id]); await addImage(p.id, f.name, r.result, id); }
+    };
+    r.readAsDataURL(f);
+  });
+  function addComment(e) {
+    const el = e.target.closest('[data-eid]') || slideOf(e.target), slide = slideOf(el);
+    const r = slide.getBoundingClientRect();
+    const text = prompt('Comment on ' + (el === slide ? 'this slide' : '"' + what(el) + '"') + ' (e.g. "Replace this chart with the Q3 numbers"):');
+    if (!text || !text.trim()) return;
+    step([]);
+    const anchor = el.dataset.eid || '';
+    log.comments.push({ id: ++log.seq, anchor, path: anchor ? pathOfId(anchor) : pathOf(byEid(model, slide.dataset.eid) || model.body), slide: [...vdoc().querySelectorAll('.slide')].indexOf(slide) + 1,
+      what: what(el), pin: { x: +((e.clientX - r.left) / r.width).toFixed(3), y: +((e.clientY - r.top) / r.height).toFixed(3) }, text: text.trim(), at: stamp() });
+    setDirty(true); renderPins(); refresh();
+  }
+  function renderPins() {
+    const d = vdoc(); if (!d) return;
+    d.querySelectorAll('.de-dot').forEach(p => p.remove());
+    const slides = [...d.querySelectorAll('.slide')];
+    log.comments.forEach((c, i) => {
+      const slide = slides[c.slide - 1] || (c.slide === 0 ? d.body : null); if (!slide) return;
+      const p = d.createElement('div');
+      p.className = 'de-dot' + (c.pin.x > 0.6 ? ' de-left' : ''); p.textContent = i + 1; p.dataset.text = c.text;
+      p.style.left = (c.pin.x * 100) + '%'; p.style.top = (c.pin.y * 100) + '%';
+      p.addEventListener('mouseenter', () => mark(byEid(d, c.anchor)));
+      p.addEventListener('mouseleave', () => mark(null));
+      p.addEventListener('click', ev => {
+        ev.stopPropagation();
+        const t = prompt('Edit the comment (leave it empty to delete it):', c.text);
+        if (t === null || t.trim() === c.text) return;
+        step([]);
+        const live = log.comments.find(x => x.id === c.id);
+        if (t.trim()) Object.assign(live, { text: t.trim(), at: stamp() }); else log.comments = log.comments.filter(x => x.id !== c.id);
+        setDirty(true); renderPins(); refresh();
+      });
+      slide.appendChild(p);
+    });
+  }
+
+  // ---------- open ----------
+  ui.open.addEventListener('click', async () => {
+    if (!window.showDirectoryPicker) return say('This editor needs Chrome or Edge.');
+    if (dirty && !confirm('Discard changes not exported yet?')) return;
+    let d; try { d = await window.showDirectoryPicker({ mode: 'readwrite' }); } catch (e) { return; }
+    const names = [];
+    for await (const [n, h] of d.entries()) if (h.kind === 'file' && /\.html?$/i.test(n) && n !== SELF) names.push(n);
+    names.sort();
+    if (!names.length) return say('No .html file in "' + d.name + '". Open the folder that holds the deck.' + (file ? ' Still open: ' + file.name + '.' : ''));
+    if (await load(names[0], d)) { ui.pick.replaceChildren(...names.map(n => new Option(n, n))); ui.pick.disabled = false; ui.pick.value = names[0]; }
+  });
+  ui.pick.addEventListener('change', async () => {
+    if ((dirty && !confirm('Discard changes not exported yet?')) || !(await load(ui.pick.value, dir))) ui.pick.value = file.name;
+  });
+  // Everything is read into local values first; the editor switches to the new deck only when that
+  // succeeds, so a failed or empty open leaves the deck that was open untouched.
+  async function load(name, from) {
+    const g = gen + 1;
+    let fh, doc, j = null;
+    try {
+      fh = await from.getFileHandle(name);
+      doc = new DOMParser().parseFromString(await (await fh.getFile()).text(), 'text/html');
+      try { j = JSON.parse(await (await readRel(reviewNameOf(name), from)).text()); } catch (e) {}  // no review file yet
+    } catch (e) { say('Could not open ' + name + ': ' + e.message + (file ? ' Still open: ' + file.name + '.' : '')); return false; }
+    gen = g; viewReady = false;
+    dir = from; file = fh; model = doc;
+    newFiles = new Map(); history = []; mode = null; selected = null; lastTextEl = null; pending = null; drag = null;
+    log = { reviewer: '', edits: {}, comments: [], seq: 0 };
+    if (j) {
+      log = { reviewer: j.reviewer || '', edits: {}, comments: j.comments || [], seq: Math.max(0, ...(j.comments || []).map(c => c.id || 0)) };
+      (j.edits || []).forEach(x => { log.edits[keyOf(x)] = x; });
+    }
+    const added = cut(model);
+    // The file is as it was opened: the review file's edits are put back onto the model here, before it is shown.
+    let replayed = 0, lost = 0;
+    for (const x of Object.values(log.edits).sort((a, b) => (a.type === 'add-image') - (b.type === 'add-image'))) {  // added images last: they hang off anchored elements
+      let ok = null;
+      if (x.type === 'text') ok = putText(x.anchor, x.lang, x.new);
+      else if (x.type === 'move') ok = putMove(x.anchor, x.new.move, x.new.scale);
+      else if (x.type === 'image') ok = await putImage(x.anchor, x.name, x.data, x.new);
+      else if (x.type === 'add-image') ok = await putAddImage(x.anchor, x.name, x.data, x.id, x.new);
+      if (g !== gen) return false;
+      ok ? replayed++ : lost++;
+    }
+    const notes = [];
+    if (added) notes.push(added + ' element(s) given an anchor');
+    const e = Object.keys(log.edits).length, c = log.comments.length;
+    if (e || c) notes.push('review file read: ' + e + ' edit(s), ' + c + ' comment(s)' + (lost ? ', ' + lost + ' not found in this file' : ''));
+    history = [];
+    setDirty(false);
+    document.querySelectorAll('.need').forEach(b => { b.disabled = false; });
+    applyMode(); refresh();
+    const missing = await render();
+    if (g !== gen) return false;
+    if (missing.length) notes.push(missing.length + ' file(s) not found: ' + missing.slice(0, 3).join(', ') + (missing.length > 3 ? ', …' : ''));
+    say(name + (notes.length ? ': ' + notes.join(' · ') + '.' : ' opened.'));
+    return true;
+  }
+
+  // ---------- Export JSON: the review file, next to the deck; the deck itself is never written ----------
+  // No newline after </html>: a parser moves anything after it into <body>.
+  const serialize = (doc = model) => '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+  function reviewFile() {
+    const edits = Object.values(log.edits).sort((a, b) => (a.slide - b.slide) || a.at.localeCompare(b.at));
+    return JSON.stringify({ format: 'pinpaw/1',
+      note: 'Every edit and comment made to ' + file.name + ' since it was opened in Pinpaw. Each entry names its element by anchor (data-eid, present only in an exported final deck), by CSS path into the original file, and by its original value. Give this file and the deck to your agent; it carries out the comments and can re-apply the edits.',
+      deck: file.name, reviewer: log.reviewer, saved: stamp(), edits, comments: log.comments }, null, 2);
+  }
+  async function exportJson() {
+    if (!model) return;
+    const n = Object.keys(log.edits).length + log.comments.length;
+    if (n && !log.reviewer) {
+      const r = prompt('Your name (it goes into the JSON, so whoever reads it knows whose edits and comments these are):');
+      if (!r || !r.trim()) return say('Not exported: the JSON needs your name.');
+      log.reviewer = r.trim();
+    }
+    try {
+      if (n) await writeRel(reviewName(), new Blob([reviewFile()], { type: 'application/json' }));
+      else await dir.removeEntry(reviewName()).catch(e => { if (e.name !== 'NotFoundError') throw e; });  // none to remove is fine; anything else is not
+      setDirty(false);
+      say(n ? 'Exported ' + reviewName() + ' into "' + dir.name + '". Give it, with the deck, to your agent.' : 'Nothing to export yet: no edits, no comments.');
+    } catch (e) { say('Could not export: ' + e.message); }
+  }
+  async function exportFinal() {
+    if (!model) return;
+    let to; try { to = await window.showDirectoryPicker({ mode: 'readwrite' }); } catch (e) { return; }
+    if (await to.isSameEntry(dir)) return say('Choose another, empty folder: the final deck never sits next to the JSON.');
+    for await (const x of to.keys()) return say('"' + to.name + '" is not empty (it holds ' + x + '). Choose an empty folder, so nothing else goes out with the deck.');
+    try {
+      const doc = model.cloneNode(true);
+      let n = 0; const missing = [];
+      for (const rel of relsOf(doc)) { try { await writeRel(rel, newFiles.get(rel) || await readRel(rel), to); n++; } catch (e) { missing.push(rel); } }
+      await writeRel(file.name, new Blob([serialize(doc)], { type: 'text/html' }), to);
+      say('Final deck in folder "' + to.name + '": ' + file.name + ' and ' + n + ' file(s), no comments, no JSON. '
+        + (missing.length ? 'Not copied, so they will be missing: ' + missing.join(', ') + '. ' : '') + 'Present it, or zip that folder to send it.');
+    } catch (e) { say('Could not copy: ' + e.message); }
+  }
+
+  // ---------- toolbar ----------
+  document.getElementById('bar').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.mode) return setMode(b.dataset.mode);
+    if (b.dataset.act === 'undo') return undo();
+    if (b.dataset.act) return nudge(b.dataset.act);
+  });
+  ui.json.addEventListener('click', exportJson);
+  ui.final.addEventListener('click', exportFinal);
+  function onKey(e) { if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); exportJson(); } }
+  document.addEventListener('keydown', onKey);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520" width="400" height="520">
+  <!-- A flat-style black cat tasting an espresso martini. Replace me in 🖼 Image mode, or drag me in ✋ Move mode. -->
+  <defs>
+    <clipPath id="glass"><path d="M78 268 Q200 236 322 268 L292 352 Q200 392 108 352 Z"/></clipPath>
+  </defs>
+  <rect width="400" height="520" fill="#a9bc98"/>
+  <rect y="372" width="400" height="148" fill="#3f7a52"/>
+  <!-- tail -->
+  <path d="M292 470 Q380 470 372 392 Q366 346 326 352" fill="none" stroke="#141414" stroke-width="30" stroke-linecap="round"/>
+  <!-- body -->
+  <path d="M190 468 Q172 300 236 236 Q310 190 330 300 Q346 400 300 470 Z" fill="#141414"/>
+  <!-- head -->
+  <path d="M164 80 L186 150 L262 150 L284 80 L262 112 Q224 92 186 112 Z" fill="#141414"/>
+  <ellipse cx="224" cy="168" rx="74" ry="66" fill="#141414"/>
+  <!-- eyes -->
+  <ellipse cx="196" cy="160" rx="18" ry="20" fill="#f2b531"/>
+  <ellipse cx="252" cy="160" rx="18" ry="20" fill="#f2b531"/>
+  <ellipse cx="198" cy="162" rx="7" ry="13" fill="#141414"/>
+  <ellipse cx="250" cy="162" rx="7" ry="13" fill="#141414"/>
+  <circle cx="203" cy="153" r="3" fill="#fff"/><circle cx="255" cy="153" r="3" fill="#fff"/>
+  <!-- whiskers -->
+  <g stroke="#141414" stroke-width="2.5" stroke-linecap="round">
+    <path d="M150 190 L112 182"/><path d="M152 204 L114 210"/><path d="M298 190 L336 182"/><path d="M296 204 L334 210"/>
+  </g>
+  <!-- tongue -->
+  <ellipse cx="226" cy="214" rx="9" ry="12" fill="#e58aa0"/>
+  <!-- glass stem and foot -->
+  <rect x="194" y="360" width="12" height="92" fill="#d8d6cc"/>
+  <ellipse cx="200" cy="456" rx="56" ry="12" fill="#cfcdc2"/>
+  <ellipse cx="200" cy="452" rx="56" ry="10" fill="#e4e2d8"/>
+  <!-- drink -->
+  <g clip-path="url(#glass)">
+    <rect x="70" y="230" width="260" height="170" fill="#2a160e"/>
+    <rect x="70" y="300" width="260" height="22" fill="#a86a2d"/>
+    <rect x="70" y="236" width="260" height="64" fill="#efe6d6"/>
+  </g>
+  <path d="M78 268 Q200 236 322 268 L292 352 Q200 392 108 352 Z" fill="none" stroke="#f4f2ea" stroke-width="4"/>
+  <ellipse cx="200" cy="268" rx="122" ry="30" fill="#f6efe0"/>
+  <!-- beans -->
+  <g fill="#4a2a17"><ellipse cx="170" cy="266" rx="12" ry="7" transform="rotate(-20 170 266)"/><ellipse cx="206" cy="272" rx="12" ry="7" transform="rotate(15 206 272)"/><ellipse cx="240" cy="262" rx="12" ry="7" transform="rotate(-10 240 262)"/></g>
+  <!-- paws on the rim -->
+  <ellipse cx="160" cy="246" rx="20" ry="14" fill="#141414"/>
+  <ellipse cx="236" cy="240" rx="20" ry="14" fill="#141414"/>
+  <!-- label -->
+  <rect x="60" y="20" width="280" height="44" rx="22" fill="#fffdf6" stroke="#141414" stroke-width="3"/>
+  <text x="200" y="49" text-anchor="middle" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif" font-size="22" font-weight="700" fill="#141414">Move or replace me!</text>
+</svg>

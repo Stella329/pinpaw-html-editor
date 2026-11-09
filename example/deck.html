@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Example deck</title>
+<style>
+  body { margin: 0; background: #f3f1ff; font-family: -apple-system, system-ui, sans-serif; color: #111; }
+  .bar { display: flex; justify-content: flex-end; padding: 10px 16px; }
+  .bar button { font: inherit; border: 0; border-radius: 8px; padding: 6px 12px; background: #826cff; color: #fff; cursor: pointer; }
+  .slide { position: relative; width: 960px; min-height: 540px; margin: 16px auto; padding: 56px 64px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+  h1 { font-size: 40px; margin: 0 0 16px; }
+  h2 { font-size: 28px; margin: 0 0 12px; }
+  p { font-size: 18px; line-height: 1.6; color: #4b4b4b; }
+  .num { font-size: 56px; font-weight: 800; color: #826cff; }
+  .row { display: flex; gap: 32px; align-items: center; }
+  .card { flex: 1; padding: 20px; border: 1px solid #e3e0ff; border-radius: 12px; }
+  img { max-width: 100%; border-radius: 8px; }
+  .hero { width: 240px; flex: none; }
+  .demo { display: block; width: 100%; margin-top: 8px; border-radius: 12px; }
+</style>
+</head>
+<body data-lang="en">
+<div class="bar"><button id="lang">中文 / EN</button></div>
+
+<section class="slide">
+  <h1 data-en="A deck you can edit by hand" data-zh="一份可以直接改的 deck">A deck you can edit by hand</h1>
+  <div class="row">
+    <p data-en="Open this folder in Pinpaw. Change the text, drag the cat, swap its picture. Pin a comment on anything you would rather hand to your agent." data-zh="用 Pinpaw 打开这个文件夹。改文字、拖一下猫、换掉它的图。想交给 agent 做的，钉一条批注。">Open this folder in Pinpaw. Change the text, drag the cat, swap its picture. Pin a comment on anything you would rather hand to your agent.</p>
+    <img class="hero" src="images/cat.svg" alt="A black cat tasting an espresso martini: move or replace me">
+  </div>
+</section>
+
+<section class="slide">
+  <h2 data-en="Numbers are plain text" data-zh="数字是普通文本">Numbers are plain text</h2>
+  <div class="row">
+    <div class="card"><div class="num">27%</div><p data-en="less time per slide" data-zh="每页更省时">less time per slide</p></div>
+    <div class="card"><div class="num">2x</div><p data-en="faster review rounds" data-zh="审阅轮次快一倍">faster review rounds</p></div>
+    <div class="card"><img src="images/chart.svg" alt="Throughput chart"></div>
+  </div>
+</section>
+
+<section class="slide">
+  <h2 data-en="Heavy edits go to your agent" data-zh="重改交给你的 agent">Heavy edits go to your agent</h2>
+  <p data-en="A new slide, a redesigned layout, a chart with new data: pin a comment here and export the JSON. Your agent reads the CSS path and the original text, finds the element, and does the work." data-zh="新加一页、重排版式、换新数据的图表：在这里钉一条批注，导出 JSON。agent 按 CSS 路径和原文找到元素，把活干了。">A new slide, a redesigned layout, a chart with new data: pin a comment here and export the JSON. Your agent reads the CSS path and the original text, finds the element, and does the work.</p>
+  <img class="demo" src="images/demo.svg" alt="Pin a comment, export the JSON, your agent remakes the slide">
+</section>
+
+<script>
+  // A two-language deck: each text carries data-en and data-zh; the button swaps what is shown.
+  // Pinpaw edits the language on screen and writes it back into that attribute.
+  document.getElementById('lang').addEventListener('click', () => {
+    const b = document.body, lang = b.getAttribute('data-lang') === 'en' ? 'zh' : 'en';
+    b.setAttribute('data-lang', lang);
+    document.querySelectorAll('[data-en]').forEach(el => { el.innerHTML = el.getAttribute('data-' + lang); });
+  });
+</script>
+</body>
+</html>
