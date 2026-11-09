@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="Pinpaw" width="96" align="right">
+
 # Pinpaw · HTML deck editor
 
 **Edit an HTML deck in your browser. Do the light edits yourself. Hand the heavy ones to your agent.**
@@ -151,6 +153,7 @@ An element without `data-en` is plain text, edited once for every language (`"la
 editor.html        the whole tool, one file: Pinpaw
 example/           a three-slide deck to try it on: a cat to move or replace, numbers, a two-language toggle
 docs/demo.gif      the loop above (also demo.mp4); its source is example/images/demo.svg, pure CSS
+docs/logo.svg      the cat, head only, with a pin on its ear
 LICENSE            MIT
 ```
 

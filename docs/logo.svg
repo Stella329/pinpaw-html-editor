@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <!-- Pinpaw: the cat from the example, head only, on the example's green -->
+  <circle cx="120" cy="120" r="120" fill="#a9bc98"/>
+  <!-- ears -->
+  <path d="M46 44 L70 118 L170 118 L194 44 L166 86 Q120 62 74 86 Z" fill="#141414"/>
+  <!-- head -->
+  <ellipse cx="120" cy="138" rx="80" ry="70" fill="#141414"/>
+  <!-- eyes -->
+  <ellipse cx="90" cy="128" rx="19" ry="22" fill="#f2b531"/>
+  <ellipse cx="150" cy="128" rx="19" ry="22" fill="#f2b531"/>
+  <ellipse cx="92" cy="130" rx="7" ry="14" fill="#141414"/>
+  <ellipse cx="148" cy="130" rx="7" ry="14" fill="#141414"/>
+  <circle cx="97" cy="120" r="3.5" fill="#fff"/><circle cx="153" cy="120" r="3.5" fill="#fff"/>
+  <!-- whiskers -->
+  <g stroke="#141414" stroke-width="3" stroke-linecap="round">
+    <path d="M42 150 L8 142"/><path d="M44 166 L10 172"/><path d="M198 150 L232 142"/><path d="M196 166 L230 172"/>
+  </g>
+  <!-- tongue -->
+  <ellipse cx="121" cy="184" rx="10" ry="13" fill="#e58aa0"/>
+  <!-- the pin: a comment dot on the ear -->
+  <circle cx="186" cy="60" r="20" fill="#e58aa0" stroke="#141414" stroke-width="3"/>
+  <text x="186" y="67" text-anchor="middle" font-family="-apple-system, 'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" fill="#141414">1</text>
+</svg>
